@@ -1,0 +1,33 @@
+git status
+git add .
+git commit -m "Añade historial al reconectar" (Ejemplo)
+git push
+
+
+TEST NODO
+
+1. Arrancar:
+   npm run dev
+
+2. PC:
+   http://localhost:5173
+
+3. Móvil:
+   http://IP_LOCAL:5173
+
+4. Crear sala desde PC.
+
+5. Unirse desde móvil.
+
+6. Iniciar partida.
+
+7. Probar función nueva.
+
+8. Si algo falla:
+   - captura de CMD
+   - captura de pantalla
+   - qué botón pulsé
+   - qué debería haber pasado
+
+
+23432
