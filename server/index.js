@@ -333,6 +333,51 @@ emitRoomState(safeCode);
   callback?.({ ok: true });
   emitRoomState(room.code);
 });
+
+socket.on("register-operation", ({ code, action, targetId }, callback) => {
+  const room = rooms.get(String(code || "").trim());
+
+  if (!room) {
+    return callback?.({ ok: false, error: "Sala no encontrada." });
+  }
+
+  if (socket.id !== room.hostSocketId) {
+    return callback?.({ ok: false, error: "Solo el anfitrión puede registrar operaciones." });
+  }
+
+  if (room.phase !== "playing") {
+    return callback?.({ ok: false, error: "La partida aún no ha empezado." });
+  }
+
+  if (room.roundPhase !== "operacion") {
+    return callback?.({ ok: false, error: "Solo se pueden registrar operaciones en la fase OPERACIÓN." });
+  }
+
+  const cleanAction = String(action || "").trim();
+  const target = room.players.find(player => player.id === targetId);
+
+  if (!cleanAction) {
+    return callback?.({ ok: false, error: "Elige una acción." });
+  }
+
+  if (!target) {
+    return callback?.({ ok: false, error: "Elige un objetivo válido." });
+  }
+
+  const operationEvent = {
+    text: `OPERACIÓN REGISTRADA\nAcción: ${cleanAction}\nObjetivo: ${target.name}\nLa IA procesará las consecuencias.`,
+    time: new Date().toISOString()
+  };
+
+  room.globalEvents.push(operationEvent);
+  io.to(room.code).emit("global-event", operationEvent);
+
+  addLog(room, `Operación: ${cleanAction} sobre ${target.name}.`, "operation");
+
+  callback?.({ ok: true });
+  emitRoomState(room.code);
+});
+
   socket.on("global-chat", ({ code, text }) => {
     const room = rooms.get(String(code || "").trim());
     if (!room) return;

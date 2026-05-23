@@ -24,6 +24,8 @@ function App() {
   const [chat, setChat] = useState([]);
   const [chatText, setChatText] = useState("");
   const [connectionStatus, setConnectionStatus] = useState("connected");
+  const [operationAction, setOperationAction] = useState("Investigar");
+  const [operationTargetId, setOperationTargetId] = useState("");
   const [now, setNow] = useState(Date.now());
 
   const isHost = room?.hostSocketId === playerId;
@@ -249,6 +251,22 @@ function reconnect() {
       if (!response?.ok) setError(response?.error || "No se pudo avanzar ronda.");
     });
   }
+  function registerOperation() {
+	if (!room) return;
+
+	socket.emit("register-operation", {
+		code: room.code,
+		action: operationAction,
+		targetId: operationTargetId
+	 }, response => {
+		if (!response?.ok) {
+		setError(response?.error || "No se pudo registrar la operación.");
+		return;
+		}
+
+		setError("");
+	 });
+	}
 
   function sendChat(event) {
     event.preventDefault();
@@ -343,6 +361,40 @@ function reconnect() {
               )}
             </div>
           )}
+		{isHost && room.phase === "playing" && room.roundPhase === "operacion" && (
+			<div className="operationPanel">
+				<h3>Registrar operación</h3>
+
+				<label>Acción</label>
+				<select
+				 value={operationAction}
+				 onChange={event => setOperationAction(event.target.value)}
+				>
+				 <option value="Investigar">Investigar</option>
+				 <option value="Aislar">Aislar</option>
+				 <option value="Proteger">Proteger</option>
+				 <option value="Acusar">Acusar</option>
+				 <option value="Votación secreta">Votación secreta</option>
+				</select>
+
+				<label>Objetivo</label>
+				<select
+				 value={operationTargetId}
+				 onChange={event => setOperationTargetId(event.target.value)}
+				>
+				 <option value="">Elige jugador</option>
+				 {room.players.map(player => (
+					<option value={player.id} key={player.id}>
+						{player.name}
+					</option>
+				 ))}
+				</select>
+
+				<button onClick={registerOperation}>
+				 Confirmar operación
+				</button>
+			</div>
+		)}
         </div>
 
         <div className="card danger">
