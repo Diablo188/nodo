@@ -56,6 +56,43 @@ const privateMessages = [
   "La IA no puede confirmar si tu objetivo sigue siendo seguro.",
   "El jugador con más seguridad al hablar podría estar mintiendo."
 ];
+const roundPhases = ["alerta", "negociacion", "transmision", "operacion", "fallo"];
+
+const phaseLabels = {
+  alerta: "ALERTA",
+  negociacion: "NEGOCIACIÓN",
+  transmision: "TRANSMISIÓN",
+  operacion: "OPERACIÓN",
+  fallo: "FALLO DEL SISTEMA"
+};
+
+const phaseGlobalMessages = {
+  alerta: [
+    "NODO detecta una anomalía en el refugio. Todos deben declarar qué saben.",
+    "ALERTA: se ha registrado una contradicción en los testimonios.",
+    "La IA sospecha que alguien ha ocultado información crítica."
+  ],
+  negociacion: [
+    "Fase de negociación: hablad, pactad, mentid o confesad. La IA observa.",
+    "Negociación abierta. Durante esta fase, toda alianza puede ser usada en vuestra contra.",
+    "NODO permite comunicación libre. No todo lo dicho será recordado igual."
+  ],
+  transmision: [
+    "Transmisión privada iniciada. Revisad vuestros buzones de IA.",
+    "NODO envía señales individuales. No todas son fiables.",
+    "Canal privado abierto. La información puede estar corrupta."
+  ],
+  operacion: [
+    "Operación activa: el grupo debe tomar una decisión pública.",
+    "Elegid a un jugador para investigar, proteger, aislar o acusar.",
+    "La IA exige una decisión colectiva antes de continuar."
+  ],
+  fallo: [
+    "FALLO DEL SISTEMA: las reglas sociales se alteran temporalmente.",
+    "Error crítico. NODO aplica un protocolo inesperado.",
+    "La memoria de la IA se fragmenta. Un evento caótico queda activado."
+  ]
+};
 
 function makeCode() {
   let code;
@@ -75,10 +112,11 @@ function shuffle(array) {
 
 function publicRoomState(room) {
   return {
-    code: room.code,
-    hostSocketId: room.hostSocketId,
-    phase: room.phase,
-    round: room.round,
+	code: room.code,
+	hostSocketId: room.hostSocketId,
+	phase: room.phase,
+	round: room.round,
+	roundPhase: room.roundPhase || null,
     players: room.players.map(p => ({
       id: p.id,
       name: p.name,
@@ -121,6 +159,7 @@ io.on("connection", socket => {
   hostSocketId: socket.id,
   phase: "lobby",
   round: 0,
+  roundPhase: null,
   players: [{
     id: socket.id,
     name: safeName,
@@ -200,6 +239,7 @@ emitRoomState(safeCode);
 
     room.phase = "playing";
     room.round = 1;
+	room.roundPhase = "alerta";
 
     room.players.forEach((player, index) => {
       player.publicRole = roleDeck[index % roleDeck.length];
@@ -218,7 +258,7 @@ emitRoomState(safeCode);
 
     addLog(room, "La partida ha comenzado. La IA ha repartido identidades privadas.", "event");
     const globalEvent = {
-		text: "NODO despierta. Ciclo 1 iniciado.",
+		text: "CICLO 1 · ALERTA\nNODO despierta. Se ha detectado la primera anomalía.",
 		time: new Date().toISOString()
 	};
 
@@ -229,38 +269,58 @@ emitRoomState(safeCode);
   });
 
   socket.on("next-round", ({ code }, callback) => {
-    const room = rooms.get(String(code || "").trim());
-    if (!room) return callback?.({ ok: false, error: "Sala no encontrada." });
-    if (socket.id !== room.hostSocketId) return callback?.({ ok: false, error: "Solo el anfitrión puede avanzar ronda." });
-    if (room.phase !== "playing") return callback?.({ ok: false, error: "La partida aún no ha empezado." });
+	const room = rooms.get(String(code || "").trim());
+	if (!room) return callback?.({ ok: false, error: "Sala no encontrada." });
+	if (socket.id !== room.hostSocketId) return callback?.({ ok: false, error: "Solo el anfitrión puede avanzar fase." });
+	if (room.phase !== "playing") return callback?.({ ok: false, error: "La partida aún no ha empezado." });
 
+  const currentPhase = room.roundPhase || "alerta";
+  const currentIndex = roundPhases.indexOf(currentPhase);
+  const nextIndex = currentIndex + 1;
+
+  if (nextIndex >= roundPhases.length) {
     room.round += 1;
+    room.roundPhase = "alerta";
+  } else {
+    room.roundPhase = roundPhases[nextIndex];
+  }
+
+  const label = phaseLabels[room.roundPhase];
+  let text = `CICLO ${room.round} · ${label}\n${pick(phaseGlobalMessages[room.roundPhase])}`;
+
+  if (room.roundPhase === "fallo") {
     const protocol = pick(globalProtocols);
-    addLog(room, `Ciclo ${room.round}: ${protocol}`, "event");
-    const globalEvent = {
-		text: `CICLO ${room.round}: ${protocol}`,
-		time: new Date().toISOString()
-	};
+    text += `\n\n${protocol}`;
+    addLog(room, `Ciclo ${room.round} · ${label}: ${protocol}`, "event");
+  } else {
+    addLog(room, `Ciclo ${room.round} · ${label}`, "event");
+  }
 
-	room.globalEvents.push(globalEvent);
-	io.to(room.code).emit("global-event", globalEvent);
+  const globalEvent = {
+    text,
+    time: new Date().toISOString()
+  };
 
+  room.globalEvents.push(globalEvent);
+  io.to(room.code).emit("global-event", globalEvent);
+
+  if (room.roundPhase === "transmision") {
     room.players.forEach(player => {
       const privateMessage = {
-		from: "IA NODO",
-		text: pick(privateMessages),
-		important: false,
-		time: new Date().toISOString()
-	  };
+        from: "IA NODO",
+        text: pick(privateMessages),
+        important: false,
+        time: new Date().toISOString()
+      };
 
-	  player.privateMessages.push(privateMessage);
-	  io.to(player.id).emit("private-message", privateMessage);
+      player.privateMessages.push(privateMessage);
+      io.to(player.id).emit("private-message", privateMessage);
     });
+  }
 
-    callback?.({ ok: true });
-    emitRoomState(room.code);
-  });
-
+  callback?.({ ok: true });
+  emitRoomState(room.code);
+});
   socket.on("global-chat", ({ code, text }) => {
     const room = rooms.get(String(code || "").trim());
     if (!room) return;

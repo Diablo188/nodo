@@ -26,6 +26,13 @@ function App() {
   const [connectionStatus, setConnectionStatus] = useState("connected");
 
   const isHost = room?.hostSocketId === playerId;
+  const phaseLabel = {
+	alerta: "ALERTA",
+	negociacion: "NEGOCIACIÓN",
+	transmision: "TRANSMISIÓN",
+	operacion: "OPERACIÓN",
+	fallo: "FALLO DEL SISTEMA"
+  }[room?.roundPhase] || null;
 
   useEffect(() => {
     socket.on("room-state", setRoom);
@@ -258,7 +265,11 @@ function reconnect() {
           <h1>{room.code}</h1>
         </div>
         <div className="status">
-          <span>{room.phase === "lobby" ? "Lobby" : `Ciclo ${room.round}`}</span>
+          <span>
+			{room.phase === "lobby"
+				? "Lobby"
+				: `Ciclo ${room.round} · ${phaseLabel || "SIN FASE"}`}
+		  </span>
           {isHost && <strong>Anfitrión</strong>}
         </div>
       </header>
@@ -298,7 +309,7 @@ function reconnect() {
               {room.phase === "lobby" ? (
                 <button onClick={startGame}>Iniciar partida</button>
               ) : (
-                <button onClick={nextRound}>Siguiente ciclo</button>
+                <button onClick={nextRound}>Avanzar fase</button>
               )}
             </div>
           )}
