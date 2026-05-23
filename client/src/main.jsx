@@ -24,6 +24,7 @@ function App() {
   const [chat, setChat] = useState([]);
   const [chatText, setChatText] = useState("");
   const [connectionStatus, setConnectionStatus] = useState("connected");
+  const [now, setNow] = useState(Date.now());
 
   const isHost = room?.hostSocketId === playerId;
   const phaseLabel = {
@@ -33,6 +34,22 @@ function App() {
 	operacion: "OPERACIÓN",
 	fallo: "FALLO DEL SISTEMA"
   }[room?.roundPhase] || null;
+  
+  const phaseElapsed = room?.phaseStartedAt
+	? Math.floor((now - room.phaseStartedAt) / 1000)
+	: 0;
+
+  const phaseRemaining = room?.phaseDuration
+	? Math.max(room.phaseDuration - phaseElapsed, 0)
+	: null;
+
+  const minutes = phaseRemaining !== null
+	? Math.floor(phaseRemaining / 60)
+	: 0;
+
+  const seconds = phaseRemaining !== null
+	? String(phaseRemaining % 60).padStart(2, "0")
+	: "00";
 
   useEffect(() => {
     socket.on("room-state", setRoom);
@@ -144,6 +161,14 @@ useEffect(() => {
     socket.off("connect", restoreSavedSession);
   };
 }, [socket]);
+
+useEffect(() => {
+  const interval = setInterval(() => {
+    setNow(Date.now());
+  }, 1000);
+
+  return () => clearInterval(interval);
+}, []);
 
 function reconnect() {
   const savedSession = JSON.parse(localStorage.getItem("nodoSession") || "null");
@@ -265,13 +290,18 @@ function reconnect() {
           <h1>{room.code}</h1>
         </div>
         <div className="status">
-          <span>
-			{room.phase === "lobby"
+			<span>
+				{room.phase === "lobby"
 				? "Lobby"
 				: `Ciclo ${room.round} · ${phaseLabel || "SIN FASE"}`}
-		  </span>
-          {isHost && <strong>Anfitrión</strong>}
-        </div>
+			</span>
+
+			{room.phase === "playing" && phaseRemaining !== null && (
+			  <strong>{minutes}:{seconds}</strong>
+			)}
+
+			{isHost && <strong>Anfitrión</strong>}
+		</div>
       </header>
 	  
 	  <div className="connection-box">

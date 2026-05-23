@@ -65,6 +65,14 @@ const phaseLabels = {
   operacion: "OPERACIÓN",
   fallo: "FALLO DEL SISTEMA"
 };
+//Desde aqui se puede cambiar el tiempo de las rondas//
+const phaseDurations = {
+  alerta: 60,
+  negociacion: 300,
+  transmision: 60,
+  operacion: 180,
+  fallo: 120
+};
 
 const phaseGlobalMessages = {
   alerta: [
@@ -117,6 +125,8 @@ function publicRoomState(room) {
 	phase: room.phase,
 	round: room.round,
 	roundPhase: room.roundPhase || null,
+	phaseStartedAt: room.phaseStartedAt || null,
+	phaseDuration: room.roundPhase ? phaseDurations[room.roundPhase] : null,
     players: room.players.map(p => ({
       id: p.id,
       name: p.name,
@@ -160,6 +170,7 @@ io.on("connection", socket => {
   phase: "lobby",
   round: 0,
   roundPhase: null,
+  phaseStartedAt: null,
   players: [{
     id: socket.id,
     name: safeName,
@@ -231,7 +242,7 @@ emitRoomState(safeCode);
     const room = rooms.get(String(code || "").trim());
     if (!room) return callback?.({ ok: false, error: "Sala no encontrada." });
     if (socket.id !== room.hostSocketId) return callback?.({ ok: false, error: "Solo el anfitrión puede iniciar." });
-    if (room.players.length < 2) return callback?.({ ok: false, error: "Necesitáis mínimo 2 jugadores." });
+    if (room.players.length < 2) return callback?.({ ok: false, error: "Necesitáis mínimo 2 jugadores." }); //Aqui puedes cambiar la cantidad de jugadores//
 
     const roleDeck = shuffle(publicRoles);
     const factionDeck = shuffle(factions.slice(0, room.players.length));
@@ -240,6 +251,7 @@ emitRoomState(safeCode);
     room.phase = "playing";
     room.round = 1;
 	room.roundPhase = "alerta";
+	room.phaseStartedAt = Date.now();
 
     room.players.forEach((player, index) => {
       player.publicRole = roleDeck[index % roleDeck.length];
@@ -284,7 +296,7 @@ emitRoomState(safeCode);
   } else {
     room.roundPhase = roundPhases[nextIndex];
   }
-
+	room.phaseStartedAt = Date.now();
   const label = phaseLabels[room.roundPhase];
   let text = `CICLO ${room.round} · ${label}\n${pick(phaseGlobalMessages[room.roundPhase])}`;
 
